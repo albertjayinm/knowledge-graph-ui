@@ -1,0 +1,496 @@
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'SF Pro Text', 'Segoe UI', Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  color: var(--text);
+  transition: color 0.4s ease;
+}
+
+.kg-root {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.kg-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  outline: none;
+}
+
+.kg-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.kg-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  color: var(--label-text);
+  background: var(--label-bg);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  will-change: transform, opacity;
+  transition: font-size 0.2s ease, border-color 0.2s ease;
+}
+
+.kg-label--focus {
+  font-size: 13.5px;
+  font-weight: 650;
+  border-color: var(--accent);
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  transition: background 0.5s ease, border-color 0.5s ease;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.section-title {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 4px 0 8px;
+}
+
+.topbar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.topbar > * {
+  pointer-events: auto;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 12px;
+}
+
+.brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: conic-gradient(from 200deg, var(--accent), #00d4ff, var(--accent));
+  box-shadow: 0 0 18px var(--accent);
+  animation: spin 8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.brand-title {
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.brand-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  width: 300px;
+}
+
+.search input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+  height: 100%;
+}
+
+.search input::placeholder {
+  color: var(--muted);
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.suggestions button,
+.relations button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+}
+
+.suggestions button:hover,
+.relations button:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.suggestions .muted {
+  margin-left: auto;
+  font-size: 11.5px;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+}
+
+.actions button,
+.file-btn {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.actions button:hover,
+.file-btn:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* ---------- legend & samples ---------- */
+
+.legend {
+  position: absolute;
+  left: 16px;
+  bottom: 52px;
+  padding: 12px 14px;
+  min-width: 180px;
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: default;
+  transition: background 0.2s ease;
+}
+
+.legend-item:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.legend-item .muted {
+  margin-left: auto;
+  font-size: 11.5px;
+}
+
+.samples {
+  position: absolute;
+  right: 16px;
+  bottom: 52px;
+  padding: 12px 14px 14px;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 10px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.segmented:last-child {
+  margin-bottom: 0;
+}
+
+.segmented button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: transparent;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--muted);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.segmented button.active {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18), inset 0 0 0 1px var(--border);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* ---------- details ---------- */
+
+.details {
+  position: absolute;
+  top: 84px;
+  right: 16px;
+  width: 340px;
+  max-height: calc(100vh - 84px - 250px);
+  overflow: auto;
+  padding: 18px 18px 14px;
+  animation: slide-in 0.45s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px) scale(0.98);
+  }
+}
+
+.details h2 {
+  margin: 10px 0 6px;
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+}
+
+.description {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--chip);
+  background: color-mix(in srgb, var(--chip) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--chip) 40%, transparent);
+}
+
+.close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.close:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.meta {
+  margin: 0 0 14px;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.meta dt {
+  color: var(--muted);
+}
+
+.meta dd {
+  margin: 0;
+  text-align: right;
+}
+
+.relations {
+  list-style: none;
+  margin: 0 -6px;
+  padding: 0;
+}
+
+.relations li {
+  animation: fade-up 0.4s ease both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.rel-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rel-node {
+  margin-left: auto;
+  font-weight: 550;
+  text-align: right;
+}
+
+/* ---------- misc ---------- */
+
+.hovercard {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 13px;
+  pointer-events: none;
+  animation: fade-up 0.25s ease;
+}
+
+.hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.toast {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  font-size: 13px;
+  border-color: #ff5f5f;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .search {
+    width: 180px;
+  }
+  .legend,
+  .hint {
+    display: none;
+  }
+  .details {
+    left: 16px;
+    width: auto;
+    top: auto;
+    bottom: 200px;
+  }
+}
