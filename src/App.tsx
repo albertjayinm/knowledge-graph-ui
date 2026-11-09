@@ -12,10 +12,14 @@ interface Relation {
 
 const RESERVED = new Set(['id', 'label', 'group', 'description', 'size', 'color', 'name', 'type']);
 
+const params = new URLSearchParams(window.location.search);
+const initialSample = SAMPLES.some((s) => s.id === params.get('sample')) ? params.get('sample')! : SAMPLES[0].id;
+const initialTheme = THEMES.some((t) => t.id === params.get('theme')) ? params.get('theme')! : THEMES[0].id;
+
 export default function App() {
-  const [sampleId, setSampleId] = useState(SAMPLES[0].id);
+  const [sampleId, setSampleId] = useState(initialSample);
   const [custom, setCustom] = useState<GraphData | null>(null);
-  const [themeId, setThemeId] = useState(THEMES[0].id);
+  const [themeId, setThemeId] = useState(initialTheme);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [query, setQuery] = useState('');
@@ -30,6 +34,39 @@ export default function App() {
     setHovered(null);
     setQuery('');
   }, [data]);
+
+  useEffect(() => {
+    const src = params.get('src');
+    if (!src) return;
+    const url = new URL(src, window.location.href);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      setError('The "src" parameter must be an http(s) or relative URL.');
+      return;
+    }
+    let cancelled = false;
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Could not load ${url.pathname} (HTTP ${res.status}).`);
+        return res.text();
+      })
+      .then((text) => {
+        if (cancelled) return;
+        setCustom(parseGraphJson(text));
+        setSampleId('custom');
+      })
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const focusId = params.get('focus');
+    if (!focusId || (params.get('src') && sampleId !== 'custom')) return;
+    // Wait for the layout to settle so the camera frames the final position.
+    const t = window.setTimeout(() => graph.current?.focusNode(focusId), 2800);
+    return () => window.clearTimeout(t);
+  }, [sampleId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

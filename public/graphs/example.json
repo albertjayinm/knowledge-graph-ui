@@ -1,0 +1,19 @@
+{
+  "title": "Example Service Map",
+  "nodes": [
+    { "id": "web", "label": "Web App", "group": "Frontend", "description": "React single-page app." },
+    { "id": "api", "label": "API Gateway", "group": "Service", "description": "Routes requests to services." },
+    { "id": "auth", "label": "Auth Service", "group": "Service", "description": "Issues and verifies JWTs.", "owner": "identity-team" },
+    { "id": "orders", "label": "Orders Service", "group": "Service", "description": "Creates and tracks orders." },
+    { "id": "db", "label": "Postgres", "group": "Data", "description": "Primary relational store." },
+    { "id": "queue", "label": "Event Queue", "group": "Data", "description": "Async events between services." }
+  ],
+  "links": [
+    { "source": "web", "target": "api", "label": "calls" },
+    { "source": "api", "target": "auth", "label": "authenticates via" },
+    { "source": "api", "target": "orders", "label": "routes to" },
+    { "source": "orders", "target": "db", "label": "reads/writes" },
+    { "source": "auth", "target": "db", "label": "reads" },
+    { "source": "orders", "target": "queue", "label": "publishes to" }
+  ]
+}

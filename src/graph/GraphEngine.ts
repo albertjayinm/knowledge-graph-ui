@@ -301,7 +301,9 @@ export class GraphEngine {
 
   focusNode(id: string): void {
     const idx = this.idToIndex.get(id);
-    if (idx !== undefined) this.select(idx, true);
+    if (idx === undefined) return;
+    this.needsFit = false;
+    this.select(idx, true);
   }
 
   clearSelection(): void {
