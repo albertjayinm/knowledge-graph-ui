@@ -130,18 +130,9 @@ button {
 }
 
 .brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  background: conic-gradient(from 200deg, var(--accent), #00d4ff, var(--accent));
-  box-shadow: 0 0 18px var(--accent);
-  animation: spin 8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  width: 30px;
+  height: 30px;
+  flex: none;
 }
 
 .brand-title {

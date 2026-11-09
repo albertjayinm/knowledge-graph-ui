@@ -124,6 +124,8 @@ export class GraphEngine {
   private labelEls: HTMLDivElement[] = [];
   private topNodes = new Set<number>();
   private needsFit = false;
+  private pendingFocus = -1;
+  manualClock = false;
 
   // Visuals
   private nodeMesh: THREE.InstancedMesh | null = null;
@@ -303,7 +305,14 @@ export class GraphEngine {
     const idx = this.idToIndex.get(id);
     if (idx === undefined) return;
     this.needsFit = false;
+    this.pendingFocus = -1;
     this.select(idx, true);
+  }
+
+  /** Focuses once the initial layout has cooled, instead of the default fit-to-view. */
+  focusNodeWhenSettled(id: string): void {
+    const idx = this.idToIndex.get(id);
+    if (idx !== undefined) this.pendingFocus = idx;
   }
 
   clearSelection(): void {
@@ -805,14 +814,22 @@ export class GraphEngine {
     this.raf = requestAnimationFrame(this.frame);
     const dt = Math.min(Math.max((ts - this.lastTs) / 1000, 0), 0.05);
     this.lastTs = ts;
-    this.time += dt;
+    if (!this.manualClock) this.tick(dt);
+  };
 
+  /** Advances the animation by exact 1/30 s frames; used with `manualClock` for frame-perfect recordings. */
+  advance(frames = 1): void {
+    for (let i = 0; i < frames; i++) this.tick(1 / 30);
+  }
+
+  private tick(dt: number): void {
+    this.time += dt;
     if (this.layout && this.nodes.length) this.simulate(dt);
     this.updateCamera(dt);
     this.updateVisuals(dt);
     this.renderer.render(this.scene, this.camera);
     this.updateLabels(dt);
-  };
+  }
 
   private simulate(dt: number): void {
     const layout = this.layout!;
@@ -848,7 +865,9 @@ export class GraphEngine {
 
     if (this.needsFit && layout.alpha < 0.05) {
       this.needsFit = false;
-      this.fitView(1800);
+      if (this.pendingFocus >= 0) this.select(this.pendingFocus, true);
+      else this.fitView(1800);
+      this.pendingFocus = -1;
     }
   }
 

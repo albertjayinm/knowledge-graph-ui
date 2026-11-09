@@ -5,6 +5,7 @@ export const THEMES: Theme[] = [
   {
     id: 'nebula',
     name: 'Nebula',
+    dark: true,
     ui: {
       background:
         'radial-gradient(1200px 800px at 70% 20%, #1b1440 0%, transparent 60%), radial-gradient(900px 700px at 15% 85%, #0b2a3d 0%, transparent 60%), #05060f',
@@ -30,6 +31,7 @@ export const THEMES: Theme[] = [
   {
     id: 'neon',
     name: 'Neon Grid',
+    dark: true,
     ui: {
       background:
         'radial-gradient(1000px 600px at 50% 110%, #3a0a4a 0%, transparent 65%), linear-gradient(180deg, #06020f 0%, #0d0420 100%)',
@@ -55,6 +57,7 @@ export const THEMES: Theme[] = [
   {
     id: 'obsidian',
     name: 'Obsidian',
+    dark: true,
     ui: {
       background: 'radial-gradient(1200px 900px at 50% 45%, #232323 0%, #1a1a1a 70%)',
       panel: 'rgba(38, 38, 38, 0.82)',
@@ -79,6 +82,7 @@ export const THEMES: Theme[] = [
   {
     id: 'paper',
     name: 'Paper (Flexoki)',
+    dark: false,
     ui: {
       background: 'radial-gradient(1200px 900px at 50% 40%, #fffcf0 0%, #f2f0e5 100%)',
       panel: 'rgba(255, 252, 240, 0.8)',

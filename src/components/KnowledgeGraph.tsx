@@ -13,12 +13,16 @@ export interface KnowledgeGraphHandle {
 interface Props {
   data: GraphData;
   theme: Theme;
+  /** Node to select once the initial layout settles (instead of fitting the whole graph). */
+  focusId?: string;
+  /** Stops the real-time clock and exposes `window.__kgAdvance(frames)` for frame-by-frame recording. */
+  captureMode?: boolean;
   onSelect?: (node: GraphNode | null) => void;
   onHover?: (node: GraphNode | null) => void;
 }
 
 export const KnowledgeGraph = forwardRef<KnowledgeGraphHandle, Props>(function KnowledgeGraph(
-  { data, theme, onSelect, onHover },
+  { data, theme, focusId, captureMode = false, onSelect, onHover },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,8 +44,26 @@ export const KnowledgeGraph = forwardRef<KnowledgeGraphHandle, Props>(function K
     };
   }, []);
 
+  const focusRef = useRef(focusId);
+  focusRef.current = focusId;
+
   useEffect(() => {
-    engineRef.current?.setData(data);
+    const engine = engineRef.current;
+    if (!engine || !captureMode) return;
+    engine.manualClock = true;
+    const w = window as Window & { __kgAdvance?: (frames?: number) => void };
+    w.__kgAdvance = (frames) => engine.advance(frames);
+    return () => {
+      engine.manualClock = false;
+      delete w.__kgAdvance;
+    };
+  }, [captureMode]);
+
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setData(data);
+    if (focusRef.current) engine.focusNodeWhenSettled(focusRef.current);
   }, [data]);
 
   useEffect(() => {

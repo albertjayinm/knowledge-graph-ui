@@ -13,8 +13,14 @@ interface Relation {
 const RESERVED = new Set(['id', 'label', 'group', 'description', 'size', 'color', 'name', 'type']);
 
 const params = new URLSearchParams(window.location.search);
-const initialSample = SAMPLES.some((s) => s.id === params.get('sample')) ? params.get('sample')! : SAMPLES[0].id;
+const initialSample = params.get('src')
+  ? 'custom'
+  : SAMPLES.some((s) => s.id === params.get('sample'))
+    ? params.get('sample')!
+    : SAMPLES[0].id;
 const initialTheme = THEMES.some((t) => t.id === params.get('theme')) ? params.get('theme')! : THEMES[0].id;
+const LOADING: GraphData = { title: 'Loading graph…', nodes: [], links: [] };
+const captureMode = params.get('capture') === '1';
 
 export default function App() {
   const [sampleId, setSampleId] = useState(initialSample);
@@ -26,7 +32,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const graph = useRef<KnowledgeGraphHandle>(null);
 
-  const data = sampleId === 'custom' && custom ? custom : SAMPLES.find((s) => s.id === sampleId)!.data;
+  const data = sampleId === 'custom' ? (custom ?? LOADING) : SAMPLES.find((s) => s.id === sampleId)!.data;
   const theme = THEMES.find((t) => t.id === themeId)!;
 
   useEffect(() => {
@@ -38,9 +44,13 @@ export default function App() {
   useEffect(() => {
     const src = params.get('src');
     if (!src) return;
+    const fail = (message: string) => {
+      setError(message);
+      setSampleId(SAMPLES[0].id);
+    };
     const url = new URL(src, window.location.href);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      setError('The "src" parameter must be an http(s) or relative URL.');
+      fail('The "src" parameter must be an http(s) or relative URL.');
       return;
     }
     let cancelled = false;
@@ -51,22 +61,20 @@ export default function App() {
       })
       .then((text) => {
         if (cancelled) return;
-        setCustom(parseGraphJson(text));
-        setSampleId('custom');
+        const parsed = parseGraphJson(text);
+        setSrcGraph(parsed);
+        setCustom(parsed);
       })
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
+      .catch((err) => !cancelled && fail(err instanceof Error ? err.message : String(err)));
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    const focusId = params.get('focus');
-    if (!focusId || (params.get('src') && sampleId !== 'custom')) return;
-    // Wait for the layout to settle so the camera frames the final position.
-    const t = window.setTimeout(() => graph.current?.focusNode(focusId), 2800);
-    return () => window.clearTimeout(t);
-  }, [sampleId]);
+  // `?focus=` applies to the graph the URL asked for (the `src` graph or the initial sample).
+  const [srcGraph, setSrcGraph] = useState<GraphData | null>(null);
+  const focusGraph = params.get('src') ? srcGraph : SAMPLES.find((s) => s.id === initialSample)?.data;
+  const focusId = data === focusGraph ? (params.get('focus') ?? undefined) : undefined;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -147,11 +155,19 @@ export default function App() {
 
   return (
     <div className="app" style={vars}>
-      <KnowledgeGraph ref={graph} data={data} theme={theme} onSelect={setSelected} onHover={setHovered} />
+      <KnowledgeGraph
+        ref={graph}
+        data={data}
+        theme={theme}
+        focusId={focusId}
+        captureMode={captureMode}
+        onSelect={setSelected}
+        onHover={setHovered}
+      />
 
       <header className="topbar">
         <div className="brand panel">
-          <div className="brand-mark" />
+          <img className="brand-mark" src={theme.dark ? '/logo-mark-dark.svg' : '/logo-mark.svg'} alt="" />
           <div>
             <div className="brand-title">{data.title ?? 'Knowledge Graph'}</div>
             <div className="brand-sub">

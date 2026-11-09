@@ -1,0 +1,35 @@
+{
+  "brand": "Knowledge Graph UI",
+  "tagline": "Any knowledge graph, in motion",
+  "brief": "A 3D, kinetic front end for any knowledge graph, used by developers and by AI coding agents. It should feel kinetic, luminous, connected and precise, without brains, sparkles or the generic three-dot share icon.",
+  "adjectives": ["kinetic", "luminous", "connected", "precise"],
+  "criteria": "Success: says 3D graph at a glance, distinct from network clichés, readable at 16 px with the small cut, works in one colour and reversed.",
+  "industry": "software",
+  "nav": ["Docs", "Samples", "GitHub"],
+  "brand_color": "#6C4CF5",
+  "greyscale": false,
+  "designer": "GitHub Copilot",
+  "round": 2,
+  "concepts": [
+    {
+      "name": "Depth",
+      "symbol": "final/symbol.svg",
+      "lockup": "final/horizontal.svg",
+      "symbol_on_tile": "final/symbol-dark.svg",
+      "lockup_on_dark": "final/horizontal-dark.svg",
+      "tile_color": "#0B0C1D",
+      "idea": "A four-node pyramid graph whose back link breaks where it passes behind the front one, so it reads in 3D; the front node is the one in focus.",
+      "rationale": [
+        "Only mark in the category that shows a graph in space rather than on a flat page",
+        "The coloured front node mirrors the app's focus/selection state",
+        "Small-size cut drops the back link and thickens strokes for 16 px"
+      ]
+    }
+  ],
+  "recommendation": "Depth: say \"3D knowledge graph\" in one shape, with the focus node as the brand accent.",
+  "next_steps": [
+    "Use the horizontal lockup in the README and app header",
+    "Ship the web icon set as the app favicon",
+    "Run a trademark search before any public launch"
+  ]
+}

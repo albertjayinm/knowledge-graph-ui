@@ -26,6 +26,7 @@ export interface GraphData {
 export interface Theme {
   id: string;
   name: string;
+  dark: boolean;
   ui: {
     background: string;
     panel: string;
