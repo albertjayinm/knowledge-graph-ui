@@ -14,7 +14,9 @@ const TOP_LABELS = 14;
 const NODE_DIM = 0.12;
 const LINK_DIM = 0.06;
 const LINK_FOCUS = 2.4;
-const CURSOR_RADIUS_PX = 120;
+const CURSOR_RADIUS_PX = 110;
+// Nodes this close to the pointer are left alone so they can be hovered and grabbed.
+const CURSOR_CALM_PX = 36;
 const STEP = 1 / 60;
 
 const POINT_VERT = /* glsl */ `
@@ -92,6 +94,7 @@ export class GraphEngine {
   private readonly resizeObserver: ResizeObserver;
   private theme: Theme;
   private readonly cb: GraphEngineCallbacks;
+  private readonly reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
   private raf = 0;
   private time = 0;
@@ -121,6 +124,14 @@ export class GraphEngine {
   private particlePhase = new Float32Array(0);
   private labelAlpha = new Float32Array(0);
   private labelShown = new Uint8Array(0);
+  private labelTarget = new Float32Array(0);
+  private labelPriority = new Float32Array(0);
+  private labelX = new Float32Array(0);
+  private labelY = new Float32Array(0);
+  private labelZ = new Float32Array(0);
+  private labelW = new Float32Array(0);
+  private readonly labelCand: number[] = [];
+  private readonly labelBoxes: number[] = [];
   private labelEls: HTMLDivElement[] = [];
   private topNodes = new Set<number>();
   private needsFit = false;
@@ -268,6 +279,12 @@ export class GraphEngine {
     this.particlePhase = new Float32Array(m * PARTICLES_PER_LINK).map(() => Math.random());
     this.labelAlpha = new Float32Array(n);
     this.labelShown = new Uint8Array(n);
+    this.labelTarget = new Float32Array(n);
+    this.labelPriority = new Float32Array(n);
+    this.labelX = new Float32Array(n);
+    this.labelY = new Float32Array(n);
+    this.labelZ = new Float32Array(n);
+    this.labelW = new Float32Array(n);
 
     this.labelLayer.replaceChildren();
     this.labelEls = this.nodes.map((nd) => {
@@ -643,6 +660,7 @@ export class GraphEngine {
 
   /** Pushes nodes outward in a wave that travels hop-by-hop through the graph. */
   private shockwave(origin: number): void {
+    if (this.reducedMotion) return;
     const hops = new Int32Array(this.nodes.length).fill(-1);
     hops[origin] = 0;
     const queue = [origin];
@@ -766,7 +784,7 @@ export class GraphEngine {
       const sy = this.height / 2 - (v.y * f) / depth;
       const pr = (this.radius[i] * this.scaleCur[i] * f) / depth;
       const d = Math.hypot(sx - this.pointer.x, sy - this.pointer.y);
-      if (d <= Math.max(pr, 5) + 3 && depth < bestDepth) {
+      if (d <= Math.max(pr, 6) + 6 && depth < bestDepth) {
         best = i;
         bestDepth = depth;
       }
@@ -780,7 +798,7 @@ export class GraphEngine {
     const mvx = p.vx, mvy = p.vy;
     p.vx *= 0.75;
     p.vy *= 0.75;
-    if (!p.inside || this.orbiting || this.dragIndex >= 0 || !this.layout) return;
+    if (!p.inside || this.orbiting || this.dragIndex >= 0 || !this.layout || this.reducedMotion) return;
 
     this.raycaster.setFromCamera(p.ndc, this.camera);
     const { origin: o, direction: d } = this.raycaster.ray;
@@ -791,8 +809,10 @@ export class GraphEngine {
     const wy = this.right.y * mvx - this.up.y * mvy;
     const wz = this.right.z * mvx - this.up.z * mvy;
 
+    // While a node is under the pointer, keep everything still so it is easy to click or drag.
+    if (this.hovered >= 0) return;
+
     for (let i = 0; i < this.nodes.length; i++) {
-      if (i === this.hovered) continue;
       const px = this.vpos[i * 3], py = this.vpos[i * 3 + 1], pz = this.vpos[i * 3 + 2];
       const t = (px - o.x) * d.x + (py - o.y) * d.y + (pz - o.z) * d.z;
       if (t <= 0) continue;
@@ -800,10 +820,13 @@ export class GraphEngine {
       const dist = Math.hypot(ox, oy, oz);
       const wpp = t * pxPerDepth;
       const R = CURSOR_RADIUS_PX * wpp;
-      if (dist >= R) continue;
-      const f = (1 - dist / R) ** 2;
-      const push = (0.8 * wpp * f) / Math.max(dist, 1e-3);
-      const wake = 0.07 * wpp * f;
+      const calm = CURSOR_CALM_PX * wpp + this.radius[i] * this.scaleCur[i];
+      if (dist >= R || dist <= calm) continue;
+      // Force ramps up from the calm edge and fades out toward R: a soft ring, not a hard shove.
+      const u = (dist - calm) / (R - calm);
+      const f = Math.min(1, u / 0.3) * (1 - u) ** 2;
+      const push = (0.3 * wpp * f) / dist;
+      const wake = 0.035 * wpp * f;
       this.layout.impulse(i, ox * push + wx * wake, oy * push + wy * wake, oz * push + wz * wake);
     }
   }
@@ -856,11 +879,12 @@ export class GraphEngine {
     // Gentle idle drift so the graph always feels alive.
     const p = layout.pos;
     const tm = this.time;
+    const amp = this.reducedMotion ? 0 : 0.7;
     for (let i = 0; i < this.nodes.length; i++) {
       const o = i * 3;
-      this.vpos[o] = p[o] + 0.7 * Math.sin(tm * 0.6 + i * 1.7);
-      this.vpos[o + 1] = p[o + 1] + 0.7 * Math.cos(tm * 0.5 + i * 2.3);
-      this.vpos[o + 2] = p[o + 2] + 0.7 * Math.sin(tm * 0.45 + i * 0.9);
+      this.vpos[o] = p[o] + amp * Math.sin(tm * 0.6 + i * 1.7);
+      this.vpos[o + 1] = p[o + 1] + amp * Math.cos(tm * 0.5 + i * 2.3);
+      this.vpos[o + 2] = p[o + 2] + amp * Math.sin(tm * 0.45 + i * 0.9);
     }
 
     if (this.needsFit && layout.alpha < 0.05) {
@@ -880,7 +904,7 @@ export class GraphEngine {
       this.controls.target.lerpVectors(tw.fromTarget, tw.toTarget, e);
       if (k >= 1) this.tween = null;
     }
-    const idle = this.time - this.lastInteraction > 5 && this.selected < 0 && !tw;
+    const idle = this.time - this.lastInteraction > 5 && this.selected < 0 && !tw && !this.reducedMotion;
     this.controls.autoRotate = true;
     this.controls.autoRotateSpeed = damp(this.controls.autoRotateSpeed, idle ? 0.35 : 0, 2, dt);
     this.controls.update(dt);
@@ -1056,9 +1080,12 @@ export class GraphEngine {
     this.up.setFromMatrixColumn(this.camera.matrixWorld, 1);
     const f = (this.height * 0.5) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2);
     const inv = this.camera.matrixWorldInverse;
+    const cand = this.labelCand;
+    cand.length = 0;
 
     for (let i = 0; i < n; i++) {
       let target: number;
+      let priority = this.neighbors[i].length;
       if (focus >= 0) target = this.focusMask[i] ? 1 : 0;
       else if (grouped) target = this.focusMask[i] ? 1 : 0;
       else {
@@ -1067,17 +1094,18 @@ export class GraphEngine {
         const px = depth > 0 ? (this.radius[i] * f) / depth : 0;
         const zoomAlpha = THREE.MathUtils.clamp((px - 6) / 6, 0, 0.9);
         target = Math.max(this.topNodes.has(i) ? 0.85 : 0, zoomAlpha);
+        priority += px;
       }
-      if (i === this.selected) target = 1;
+      if (i === this.selected) {
+        target = 1;
+        priority = 1e8;
+      }
+      if (i === focus) priority = 1e9;
+      else if (focus >= 0 && this.focusMask[i]) priority += 1e6;
 
-      this.labelAlpha[i] += (target - this.labelAlpha[i]) * k;
-      const el = this.labelEls[i];
-      const a = this.labelAlpha[i];
-      if (a < 0.02) {
-        if (this.labelShown[i]) {
-          el.style.display = 'none';
-          this.labelShown[i] = 0;
-        }
+      this.labelTarget[i] = target;
+      if (target <= 0 && this.labelAlpha[i] < 0.02) {
+        this.hideLabel(i);
         continue;
       }
       const r = this.radius[i] * this.scaleCur[i] * 1.35;
@@ -1086,22 +1114,59 @@ export class GraphEngine {
         .addScaledVector(this.up, r)
         .project(this.camera);
       if (v.z > 1 || v.z < -1) {
-        if (this.labelShown[i]) {
-          el.style.display = 'none';
-          this.labelShown[i] = 0;
-        }
+        this.labelAlpha[i] = 0;
+        this.hideLabel(i);
         continue;
       }
+      this.labelX[i] = ((v.x + 1) / 2) * this.width;
+      this.labelY[i] = ((1 - v.y) / 2) * this.height;
+      this.labelZ[i] = v.z;
+      this.labelPriority[i] = priority;
+      cand.push(i);
+    }
+
+    // Greedy placement: higher-priority labels claim screen space; overlapping ones fade out.
+    cand.sort((a, b) => this.labelPriority[b] - this.labelPriority[a]);
+    const placed = this.labelBoxes;
+    placed.length = 0;
+    for (const i of cand) {
+      const el = this.labelEls[i];
       if (!this.labelShown[i]) {
         el.style.display = '';
         this.labelShown[i] = 1;
       }
-      const x = ((v.x + 1) / 2) * this.width;
-      const y = ((1 - v.y) / 2) * this.height;
+      if (!this.labelW[i]) this.labelW[i] = el.offsetWidth || 80;
+      const w = this.labelW[i] + 6;
+      const h = (i === focus ? 26 : 22) + 2;
+      const x0 = this.labelX[i] - w / 2;
+      const y0 = this.labelY[i] - h;
+      let target = this.labelTarget[i];
+      if (target > 0 && i !== focus) {
+        for (let b = 0; b < placed.length; b += 4) {
+          if (x0 < placed[b + 2] && x0 + w > placed[b] && y0 < placed[b + 3] && y0 + h > placed[b + 1]) {
+            target = 0;
+            break;
+          }
+        }
+      }
+      if (target > 0) placed.push(x0, y0, x0 + w, y0 + h);
+
+      this.labelAlpha[i] += (target - this.labelAlpha[i]) * k;
+      const a = this.labelAlpha[i];
+      if (a < 0.02 && target === 0) {
+        this.hideLabel(i);
+        continue;
+      }
       el.style.opacity = a.toFixed(3);
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
-      el.style.zIndex = String(Math.round((1 - v.z) * 100000));
+      el.style.transform = `translate3d(${this.labelX[i].toFixed(1)}px, ${this.labelY[i].toFixed(1)}px, 0) translate(-50%, -100%)`;
+      el.style.zIndex = String(Math.round((1 - this.labelZ[i]) * 100000));
       el.classList.toggle('kg-label--focus', i === focus);
     }
+  }
+
+  private hideLabel(i: number): void {
+    if (!this.labelShown[i]) return;
+    this.labelEls[i].style.display = 'none';
+    this.labelShown[i] = 0;
   }
 }

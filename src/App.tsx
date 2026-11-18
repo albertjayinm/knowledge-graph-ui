@@ -31,6 +31,8 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const graph = useRef<KnowledgeGraphHandle>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 1100);
 
   const data = sampleId === 'custom' ? (custom ?? LOADING) : SAMPLES.find((s) => s.id === sampleId)!.data;
   const theme = THEMES.find((t) => t.id === themeId)!;
@@ -78,7 +80,22 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') graph.current?.clearSelection();
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (e.key === 'Escape') {
+        graph.current?.clearSelection();
+        if (typing) {
+          setQuery('');
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === 'f' || e.key === 'F') {
+        graph.current?.fitView();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -182,13 +199,16 @@ export default function App() {
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
+            ref={searchRef}
             value={query}
             placeholder="Search nodes…"
+            aria-label="Search nodes (press / to focus)"
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && suggestions[0]) focus(suggestions[0].id);
             }}
           />
+          <kbd className="kbd">/</kbd>
           {suggestions.length > 0 && (
             <ul className="suggestions panel">
               {suggestions.map((n) => (
@@ -230,29 +250,43 @@ export default function App() {
         ))}
       </aside>
 
-      <aside className="samples panel">
-        <div className="section-title">Sample data</div>
-        <div className="segmented">
-          {SAMPLES.map((s) => (
-            <button key={s.id} className={s.id === sampleId ? 'active' : ''} onClick={() => setSampleId(s.id)}>
-              {s.name}
-            </button>
-          ))}
-          {custom && (
-            <button className={sampleId === 'custom' ? 'active' : ''} onClick={() => setSampleId('custom')}>
-              Custom
-            </button>
-          )}
-        </div>
-        <div className="section-title">Visual style</div>
-        <div className="segmented">
-          {THEMES.map((t) => (
-            <button key={t.id} className={t.id === themeId ? 'active' : ''} onClick={() => setThemeId(t.id)}>
-              <span className="swatch" style={{ background: t.palette[0] }} />
-              {t.name}
-            </button>
-          ))}
-        </div>
+      <aside className={`samples panel ${panelOpen ? '' : 'samples--collapsed'}`}>
+        <button
+          className="samples-toggle"
+          onClick={() => setPanelOpen((o) => !o)}
+          aria-expanded={panelOpen}
+          title={panelOpen ? 'Hide samples and styles' : 'Show samples and styles'}
+        >
+          <span className="swatch" style={{ background: theme.palette[0] }} />
+          {panelOpen ? 'Samples & styles' : `${theme.name} · ${data.title ?? 'Graph'}`}
+          <span className="chevron" aria-hidden>{panelOpen ? '▾' : '▴'}</span>
+        </button>
+        {panelOpen && (
+          <>
+            <div className="section-title">Sample data</div>
+            <div className="segmented">
+              {SAMPLES.map((s) => (
+                <button key={s.id} className={s.id === sampleId ? 'active' : ''} onClick={() => setSampleId(s.id)}>
+                  {s.name}
+                </button>
+              ))}
+              {custom && (
+                <button className={sampleId === 'custom' ? 'active' : ''} onClick={() => setSampleId('custom')}>
+                  Custom
+                </button>
+              )}
+            </div>
+            <div className="section-title">Visual style</div>
+            <div className="segmented">
+              {THEMES.map((t) => (
+                <button key={t.id} className={t.id === themeId ? 'active' : ''} onClick={() => setThemeId(t.id)}>
+                  <span className="swatch" style={{ background: t.palette[0] }} />
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </aside>
 
       {selected && (
@@ -303,7 +337,7 @@ export default function App() {
       )}
 
       <footer className="hint">
-        Drag to orbit · Scroll to zoom · Right-drag to pan · Click a node to focus · Drag a node to pull it · Esc to reset
+        Drag to orbit · Scroll to zoom · Right-drag to pan · Click a node to focus · Drag a node to pull it · / search · F fit · Esc reset
       </footer>
 
       {error && (

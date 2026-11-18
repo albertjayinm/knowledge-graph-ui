@@ -156,6 +156,7 @@ button {
 
 .search input {
   flex: 1;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -170,6 +171,7 @@ button {
 }
 
 .icon {
+  flex: none;
   width: 16px;
   height: 16px;
   fill: none;
@@ -314,6 +316,51 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 3px;
+}
+
+.samples-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: -2px 0 8px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: left;
+}
+
+.samples-toggle .chevron {
+  margin-left: auto;
+}
+
+.samples--collapsed {
+  padding: 6px 12px;
+}
+
+.samples--collapsed .samples-toggle {
+  margin: 0;
+  color: var(--text);
+}
+
+.kbd {
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ---------- details ---------- */

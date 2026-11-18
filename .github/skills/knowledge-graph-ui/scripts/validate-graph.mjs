@@ -26,7 +26,7 @@ if (!Array.isArray(links)) errors.push('"links" (or "edges") must be an array.')
 if (!errors.length) {
   if (nodes.length === 0) errors.push('"nodes" is empty.');
   if (nodes.length > 2000) errors.push(`${nodes.length} nodes exceeds the 2000-node limit.`);
-  else if (nodes.length > 600) warnings.push(`${nodes.length} nodes: layout will be slow; consider filtering.`);
+  else if (nodes.length > 1500) warnings.push(`${nodes.length} nodes: close to the 2000-node limit; consider filtering.`);
 
   const ids = new Set();
   const groups = new Set();

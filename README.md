@@ -35,7 +35,7 @@ Nodes behave like a spring mesh. The cursor acts as a soft force field: nodes pa
 - **Search** with suggestions, then fly to the result.
 - **Group legend**: hover a group to light up all of its nodes.
 - **Details panel** with the description, metadata and every relation; click a relation to jump to that node.
-- **Labels fade in as you zoom**, so overviews stay clean and close-ups stay readable.
+- **Labels fade in as you zoom**, so overviews stay clean and close-ups stay readable. Labels never overlap: the most important ones (focused node, its neighbours, hubs) claim space first.
 
 | Search | Group highlight |
 |---|---|
@@ -59,7 +59,7 @@ Nodes behave like a spring mesh. The cursor acts as a soft force field: nodes pa
 - **Paper**: a light, ink-on-paper style using Steph Ango's Flexoki colours.
 
 ### Works with any graph
-Load your own data with the **Load JSON** button, or point the app at a file with a link. It handles up to about 600 nodes smoothly (hard limit 2,000).
+Load your own data with the **Load JSON** button, or point the app at a file with a link. Graphs up to 2,000 nodes lay out smoothly: above 400 nodes the layout switches to a Barnes-Hut octree, so repulsion costs O(n log n) instead of O(n²).
 
 ![Loaded from a link](docs/screenshots/load-by-url.png)
 
@@ -134,9 +134,11 @@ http://localhost:5173/?src=/graphs/example.json&theme=obsidian&focus=api
 | Move the cursor | Nodes part around it |
 | Click a node | Focus: ripple, shockwave, camera flight, details panel |
 | Drag a node | Pull it; its neighbours follow |
-| `Esc` | Clear the selection |
+| `/` | Focus the search box |
+| `F` | Fit the whole graph in view |
+| `Esc` | Clear the selection (and the search box) |
 
-The view slowly auto-rotates after 5 seconds without input.
+The view slowly auto-rotates after 5 seconds without input. With the system setting **Reduce motion** turned on, idle drift, auto-rotation, the cursor force field and click shockwaves are switched off.
 
 ## Use it as a React component
 

@@ -46,7 +46,7 @@ Collect the entities and relationships from the user's request (read files, pars
 
 Guidelines:
 - Keep ids stable and readable (file paths, slugs) so `?focus=` works.
-- Keep it under about 600 nodes for smooth motion (hard limit 2000). For larger sources, aggregate (e.g. folders instead of files) or filter to the relevant subgraph.
+- Up to 2,000 nodes lay out smoothly (hard limit 2,000). For larger sources, aggregate (e.g. folders instead of files) or filter to the relevant subgraph.
 - Make link direction meaningful: source → target reads as "source *label* target".
 - Avoid duplicate links and self-loops.
 

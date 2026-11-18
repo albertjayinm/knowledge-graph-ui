@@ -4,6 +4,8 @@
  *  - kinetic: once settled, nodes spring back to their rest ("home") positions,
  *    which gives the elastic, jelly-like response to cursor forces and impulses.
  */
+const BARNES_HUT_MIN_NODES = 400;
+
 export class ForceLayout {
   readonly n: number;
   readonly pos: Float32Array;
@@ -30,6 +32,7 @@ export class ForceLayout {
   private readonly bias: Float32Array;
   private pinned = -1;
   private readonly pinPos = new Float32Array(3);
+  private readonly octree = new Octree();
 
   constructor(n: number, links: Array<[number, number]>, seed = 7) {
     this.n = n;
@@ -131,6 +134,22 @@ export class ForceLayout {
     }
 
     const c = this.charge * a;
+    if (n > BARNES_HUT_MIN_NODES) this.octree.applyCharge(p, v, n, c);
+    else this.pairwiseCharge(p, v, n, c);
+
+    const g = this.gravity * a;
+    for (let i = 0; i < n * 3; i++) {
+      v[i] = (v[i] - p[i] * g) * this.velocityDecay;
+      p[i] += v[i];
+    }
+
+    if (this.alpha < this.alphaMin && this.alphaTarget === 0) {
+      this.settled = true;
+      this.home.set(p);
+    }
+  }
+
+  private pairwiseCharge(p: Float32Array, v: Float32Array, n: number, c: number): void {
     for (let i = 0; i < n; i++) {
       const ix = i * 3;
       for (let j = i + 1; j < n; j++) {
@@ -154,17 +173,6 @@ export class ForceLayout {
         v[jx + 2] -= dz * w;
       }
     }
-
-    const g = this.gravity * a;
-    for (let i = 0; i < n * 3; i++) {
-      v[i] = (v[i] - p[i] * g) * this.velocityDecay;
-      p[i] += v[i];
-    }
-
-    if (this.alpha < this.alphaMin && this.alphaTarget === 0) {
-      this.settled = true;
-      this.home.set(p);
-    }
   }
 
   private kineticStep(): void {
@@ -186,6 +194,159 @@ export class ForceLayout {
       v[i] = (v[i] + (h[i] - p[i]) * this.springK) * this.springDamping;
       p[i] += v[i];
     }
+  }
+}
+
+const EMPTY = -1;
+const INTERNAL = -2;
+const BUCKET = -3;
+const MAX_DEPTH = 24;
+const THETA2 = 0.81;
+
+/** Barnes-Hut octree in flat typed arrays: distant clusters repel as one body, making charge O(n log n). */
+class Octree {
+  private cap = 0;
+  private count = 0;
+  private child = new Int32Array(0);
+  private body = new Int32Array(0);
+  private mass = new Float32Array(0);
+  private com = new Float32Array(0);
+  private center = new Float32Array(0);
+  private half = new Float32Array(0);
+  private stack = new Int32Array(0);
+
+  applyCharge(p: Float32Array, v: Float32Array, n: number, c: number): void {
+    this.build(p, n);
+    const { child, body, mass, com, half, stack } = this;
+    for (let i = 0; i < n; i++) {
+      const ix = i * 3;
+      const px = p[ix], py = p[ix + 1], pz = p[ix + 2];
+      let fx = 0, fy = 0, fz = 0;
+      let top = 0;
+      stack[top++] = 0;
+      while (top > 0) {
+        const cell = stack[--top];
+        const m = mass[cell];
+        if (m === 0 || body[cell] === i) continue;
+        let dx = com[cell * 3] / m - px;
+        let dy = com[cell * 3 + 1] / m - py;
+        let dz = com[cell * 3 + 2] / m - pz;
+        let d2 = dx * dx + dy * dy + dz * dz;
+        const w2 = 4 * half[cell] * half[cell];
+        if (body[cell] !== INTERNAL || w2 < THETA2 * d2) {
+          if (d2 < 1e-6) {
+            dx = Math.random() - 0.5;
+            dy = Math.random() - 0.5;
+            dz = Math.random() - 0.5;
+            d2 = dx * dx + dy * dy + dz * dz;
+          }
+          const w = (c * m) / Math.max(d2, 4);
+          fx += dx * w;
+          fy += dy * w;
+          fz += dz * w;
+        } else {
+          for (let k = 0; k < 8; k++) {
+            const ch = child[cell * 8 + k];
+            if (ch >= 0) stack[top++] = ch;
+          }
+        }
+      }
+      v[ix] += fx;
+      v[ix + 1] += fy;
+      v[ix + 2] += fz;
+    }
+  }
+
+  private build(p: Float32Array, n: number): void {
+    this.ensure(n * 4 + 64);
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < n * 3; i += 3) {
+      minX = Math.min(minX, p[i]); maxX = Math.max(maxX, p[i]);
+      minY = Math.min(minY, p[i + 1]); maxY = Math.max(maxY, p[i + 1]);
+      minZ = Math.min(minZ, p[i + 2]); maxZ = Math.max(maxZ, p[i + 2]);
+    }
+    const h = Math.max(maxX - minX, maxY - minY, maxZ - minZ, 1) / 2 + 1;
+    this.count = 0;
+    this.newCell((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2, h);
+    for (let i = 0; i < n; i++) this.insert(p, i);
+  }
+
+  private insert(p: Float32Array, i: number): void {
+    const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+    let cell = 0;
+    for (let depth = 0; ; depth++) {
+      const wasEmpty = this.mass[cell] === 0;
+      this.addMass(cell, x, y, z);
+      const b = this.body[cell];
+      if (wasEmpty) {
+        this.body[cell] = i;
+        return;
+      }
+      if (b === BUCKET) return;
+      if (b >= 0) {
+        if (depth >= MAX_DEPTH) {
+          this.body[cell] = BUCKET;
+          return;
+        }
+        this.body[cell] = INTERNAL;
+        const bc = this.childFor(cell, p[b * 3], p[b * 3 + 1], p[b * 3 + 2]);
+        this.body[bc] = b;
+        this.addMass(bc, p[b * 3], p[b * 3 + 1], p[b * 3 + 2]);
+      }
+      cell = this.childFor(cell, x, y, z);
+    }
+  }
+
+  private childFor(cell: number, x: number, y: number, z: number): number {
+    const cx = this.center[cell * 3], cy = this.center[cell * 3 + 1], cz = this.center[cell * 3 + 2];
+    const oct = (x >= cx ? 1 : 0) | (y >= cy ? 2 : 0) | (z >= cz ? 4 : 0);
+    const slot = cell * 8 + oct;
+    let ch = this.child[slot];
+    if (ch < 0) {
+      const h = this.half[cell] / 2;
+      ch = this.newCell(cx + (oct & 1 ? h : -h), cy + (oct & 2 ? h : -h), cz + (oct & 4 ? h : -h), h);
+      this.child[slot] = ch;
+    }
+    return ch;
+  }
+
+  private addMass(cell: number, x: number, y: number, z: number): void {
+    this.mass[cell] += 1;
+    this.com[cell * 3] += x;
+    this.com[cell * 3 + 1] += y;
+    this.com[cell * 3 + 2] += z;
+  }
+
+  private newCell(x: number, y: number, z: number, h: number): number {
+    if (this.count >= this.cap) this.ensure(this.cap * 2);
+    const c = this.count++;
+    this.child.fill(-1, c * 8, c * 8 + 8);
+    this.body[c] = EMPTY;
+    this.mass[c] = 0;
+    this.com[c * 3] = this.com[c * 3 + 1] = this.com[c * 3 + 2] = 0;
+    this.center[c * 3] = x;
+    this.center[c * 3 + 1] = y;
+    this.center[c * 3 + 2] = z;
+    this.half[c] = h;
+    return c;
+  }
+
+  private ensure(cap: number): void {
+    if (cap <= this.cap) return;
+    const grow = <T extends Int32Array | Float32Array>(a: T, size: number): T => {
+      const next = new (a.constructor as new (len: number) => T)(size);
+      next.set(a);
+      return next;
+    };
+    this.child = grow(this.child, cap * 8);
+    this.body = grow(this.body, cap);
+    this.mass = grow(this.mass, cap);
+    this.com = grow(this.com, cap * 3);
+    this.center = grow(this.center, cap * 3);
+    this.half = grow(this.half, cap);
+    this.stack = grow(this.stack, cap * 8);
+    this.cap = cap;
   }
 }
 
