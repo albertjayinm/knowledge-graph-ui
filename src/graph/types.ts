@@ -46,6 +46,8 @@ export interface Theme {
     metalness: number;
     emissive: number;
     flatShading: boolean;
+    /** Glassy orb lighting for spheres: pale glowing core and a bright rim at the silhouette. */
+    orb?: { core: number; rim: number };
   };
   halo: { enabled: boolean; size: number; opacity: number };
   link: { color: string | null; opacity: number };

@@ -10,6 +10,8 @@ export interface GraphEngineCallbacks {
 }
 
 const PARTICLES_PER_LINK = 2;
+// Points trailing each spark, drawn smaller and fainter to form a comet tail.
+const SPARK_TRAIL = 4;
 const TOP_LABELS = 14;
 const NODE_DIM = 0.12;
 const LINK_DIM = 0.06;
@@ -36,12 +38,30 @@ void main() {
 
 const POINT_FRAG = /* glsl */ `
 uniform float uSoftness;
+// Fraction of the sprite radius covered by the node; the glow starts there so it isn't hidden behind the sphere.
+uniform float uInner;
 varying vec3 vColor;
 varying float vAlpha;
 void main() {
   float d = length(gl_PointCoord - 0.5) * 2.0;
   if (d > 1.0) discard;
-  gl_FragColor = vec4(vColor, pow(1.0 - d, uSoftness) * vAlpha);
+  float t = clamp((d - uInner) / (1.0 - uInner), 0.0, 1.0);
+  gl_FragColor = vec4(vColor, pow(1.0 - t, uSoftness) * vAlpha);
+  #include <colorspace_fragment>
+}`;
+
+// A spark: white-hot core inside a coloured glow, like a tiny version of the orb nodes.
+const SPARK_FRAG = /* glsl */ `
+uniform float uCore;
+varying vec3 vColor;
+varying float vAlpha;
+void main() {
+  float d = length(gl_PointCoord - 0.5) * 2.0;
+  if (d > 1.0) discard;
+  float core = smoothstep(0.22, 0.0, d);
+  float glow = pow(1.0 - d, 2.6);
+  vec3 col = mix(vColor, vec3(1.0), core * uCore);
+  gl_FragColor = vec4(col, (core + glow * 0.65) * vAlpha);
   #include <colorspace_fragment>
 }`;
 
@@ -464,13 +484,33 @@ export class GraphEngine {
       color: 0xffffff, roughness: t.node.roughness, metalness: t.node.metalness, flatShading: t.node.flatShading,
     });
     const emissive = t.node.emissive;
+    const orb = t.node.shape === 'sphere' ? t.node.orb : undefined;
     mat.onBeforeCompile = (shader) => {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance += vColor.rgb * ${emissive.toFixed(3)};\n#endif`,
       );
+      if (orb) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <opaque_fragment>',
+          /* glsl */ `#ifdef USE_COLOR
+          {
+            float ndv = saturate(dot(normalize(normal), normalize(vViewPosition)));
+            vec3 orb = vColor.rgb;
+            float peak = max(max(orb.r, orb.g), orb.b);
+            // Pale core, scaled by the node's own brightness so dimmed nodes stay dim.
+            vec3 coreCol = mix(orb, vec3(1.0), 0.7) * (0.3 + 0.9 * peak);
+            outgoingLight = mix(outgoingLight, max(outgoingLight, coreCol), ${orb.core.toFixed(3)} * pow(ndv, 2.5));
+            float rim = pow(1.0 - ndv, 3.0);
+            float edge = smoothstep(0.22, 0.04, ndv);
+            outgoingLight += (orb * 1.3 + vec3(0.3) * peak) * ${orb.rim.toFixed(3)} * (0.55 * rim + 0.45 * edge);
+          }
+          #endif
+          #include <opaque_fragment>`,
+        );
+      }
     };
-    mat.customProgramCacheKey = () => `kg-node-${emissive}`;
+    mat.customProgramCacheKey = () => `kg-node-${emissive}-${orb ? `${orb.core}-${orb.rim}` : 'flat'}`;
     this.nodeMesh = new THREE.InstancedMesh(geo, mat, n);
     this.nodeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let i = 0; i < n; i++) this.nodeMesh.setColorAt(i, this.colors[i]);
@@ -493,12 +533,14 @@ export class GraphEngine {
     this.graphGroup.add(this.lines);
 
     if (t.halo.enabled) {
-      this.halo = this.makePoints(n, 2.4, blending);
+      this.halo = this.makePoints(n, 2.4, blending, Math.min(0.8, 2 / t.halo.size));
       this.halo.renderOrder = 2;
       this.graphGroup.add(this.halo);
     }
     if (t.particles.enabled && m > 0) {
-      this.particles = this.makePoints(m * PARTICLES_PER_LINK, 1.4, blending);
+      this.particles = this.makePoints(m * PARTICLES_PER_LINK * (SPARK_TRAIL + 1), 1, blending, 0, SPARK_FRAG, {
+        uCore: { value: t.blending === 'additive' ? 0.85 : 0.25 },
+      });
       this.particles.renderOrder = 3;
       this.graphGroup.add(this.particles);
     }
@@ -518,15 +560,27 @@ export class GraphEngine {
     this.graphGroup.add(ring);
   }
 
-  private makePoints(count: number, softness: number, blending: THREE.Blending): THREE.Points {
+  private makePoints(
+    count: number,
+    softness: number,
+    blending: THREE.Blending,
+    inner = 0,
+    fragmentShader = POINT_FRAG,
+    extraUniforms: Record<string, THREE.IUniform> = {},
+  ): THREE.Points {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', dynamicAttr(new Float32Array(count * 3), 3));
     geo.setAttribute('aColor', dynamicAttr(new Float32Array(count * 3), 3));
     geo.setAttribute('aSize', dynamicAttr(new Float32Array(count), 1));
     geo.setAttribute('aAlpha', dynamicAttr(new Float32Array(count), 1));
     const mat = new THREE.ShaderMaterial({
-      uniforms: { uScale: { value: this.pointScale }, uSoftness: { value: softness } },
-      vertexShader: POINT_VERT, fragmentShader: POINT_FRAG, transparent: true, depthWrite: false, blending,
+      uniforms: {
+        uScale: { value: this.pointScale },
+        uSoftness: { value: softness },
+        uInner: { value: inner },
+        ...extraUniforms,
+      },
+      vertexShader: POINT_VERT, fragmentShader, transparent: true, depthWrite: false, blending,
     });
     const pts = new THREE.Points(geo, mat);
     pts.frustumCulled = false;
@@ -1015,24 +1069,36 @@ export class GraphEngine {
         const dz = this.vpos[eo + 2] - this.vpos[so + 2];
         const len = Math.hypot(dx, dy, dz) || 1;
         const speed = (22 * (0.6 + 0.5 * Math.min(le, LINK_FOCUS))) / len;
+        const gap = 3.2 / len;
+        const linkGlow = Math.min(1, 0.3 * le * le);
         for (let q = 0; q < PARTICLES_PER_LINK; q++) {
           const pi = l * PARTICLES_PER_LINK + q;
           let ph = this.particlePhase[pi] + dt * speed;
           if (ph > 1) ph -= 1;
           this.particlePhase[pi] = ph;
-          const po = pi * 3;
-          pPos[po] = this.vpos[so] + dx * ph;
-          pPos[po + 1] = this.vpos[so + 1] + dy * ph;
-          pPos[po + 2] = this.vpos[so + 2] + dz * ph;
-          if (pFixed) {
-            pCol[po] = pFixed.r; pCol[po + 1] = pFixed.g; pCol[po + 2] = pFixed.b;
-          } else {
-            pCol[po] = cs.r + (ce.r - cs.r) * ph;
-            pCol[po + 1] = cs.g + (ce.g - cs.g) * ph;
-            pCol[po + 2] = cs.b + (ce.b - cs.b) * ph;
+          for (let s = 0; s <= SPARK_TRAIL; s++) {
+            const si = pi * (SPARK_TRAIL + 1) + s;
+            const po = si * 3;
+            const phs = ph - s * gap;
+            if (phs <= 0) {
+              pAlpha[si] = 0;
+              continue;
+            }
+            pPos[po] = this.vpos[so] + dx * phs;
+            pPos[po + 1] = this.vpos[so + 1] + dy * phs;
+            pPos[po + 2] = this.vpos[so + 2] + dz * phs;
+            if (pFixed) {
+              pCol[po] = pFixed.r; pCol[po + 1] = pFixed.g; pCol[po + 2] = pFixed.b;
+            } else {
+              const ns = this.colors[s], ne = this.colors[e];
+              pCol[po] = ns.r + (ne.r - ns.r) * phs;
+              pCol[po + 1] = ns.g + (ne.g - ns.g) * phs;
+              pCol[po + 2] = ns.b + (ne.b - ns.b) * phs;
+            }
+            const tail = 1 - s / (SPARK_TRAIL + 1);
+            pSize[si] = t.particles.size * (0.7 + 0.3 * le) * (s === 0 ? 5.5 : 3.4 * tail);
+            pAlpha[si] = t.particles.opacity * Math.sin(Math.PI * phs) * linkGlow * (s === 0 ? 1 : 0.6 * tail);
           }
-          pSize[pi] = t.particles.size * (0.7 + 0.3 * le);
-          pAlpha[pi] = t.particles.opacity * Math.sin(Math.PI * ph) * Math.min(1, 0.3 * le * le);
         }
       }
     }
